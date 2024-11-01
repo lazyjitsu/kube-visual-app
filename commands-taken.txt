@@ -1,0 +1,40 @@
+aws ec2 create-volume --availability-zone=us-east-1a --size=3 --volume-type=gp2
+Out:
+{
+    "AvailabilityZone": "us-east-1a",
+    "CreateTime": "2024-11-01T15:28:46+00:00",
+    "Encrypted": false,
+    "Size": 3,
+    "SnapshotId": "",
+    "State": "creating",
+    "VolumeId": "vol-0a5335f630433ee3d",
+    "Iops": 100,
+    "Tags": [],
+    "VolumeType": "gp2",
+    "MultiAttachEnabled": false
+}
+Lets do some labeling. Lets first see what we have
+
+kubectl get nodes --show-labels
+
+ubuntu@ip-172-31-80-224:~$ kubectl get nodes --show-labels
+NAME                  STATUS   ROLES           AGE    VERSION   LABELS
+i-00c440a20b8d7d72a   Ready    node            132m   v1.30.2   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/instance-type=t3.small,beta.kubernetes.io/os=linux,failure-domain.beta.kubernetes.io/region=us-east-1,failure-domain.beta.kubernetes.io/zone=us-east-1a,kubernetes.io/arch=amd64,kubernetes.io/hostname=i-00c440a20b8d7d72a,kubernetes.io/os=linux,node-role.kubernetes.io/node=,node.kubernetes.io/instance-type=t3.small,topology.ebs.csi.aws.com/zone=us-east-1a,topology.k8s.aws/zone-id=use1-az1,topology.kubernetes.io/region=us-east-1,topology.kubernetes.io/zone=us-east-1a
+i-0c3421806768f0458   Ready    control-plane   136m   v1.30.2   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/instance-type=t3.medium,beta.kubernetes.io/os=linux,failure-domain.beta.kubernetes.io/region=us-east-1,failure-domain.beta.kubernetes.io/zone=us-east-1a,kops.k8s.io/kops-controller-pki=,kubernetes.io/arch=amd64,kubernetes.io/hostname=i-0c3421806768f0458,kubernetes.io/os=linux,node-role.kubernetes.io/control-plane=,node.kubernetes.io/exclude-from-external-load-balancers=,node.kubernetes.io/instance-type=t3.medium,topology.ebs.csi.aws.com/zone=us-east-1a,topology.k8s.aws/zone-id=use1-az1,topology.kubernetes.io/region=us-east-1,topology.kubernetes.io/zone=us-east-1a
+i-0f31397d584d046be   Ready    node            131m   v1.30.2   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/instance-type=t3.small,beta.kubernetes.io/os=linux,failure-domain.beta.kubernetes.io/region=us-east-1,failure-domain.beta.kubernetes.io/zone=us-east-1b,kubernetes.io/arch=amd64,kubernetes.io/hostname=i-0f31397d584d046be,kubernetes.io/os=linux,node-role.kubernetes.io/node=,node.kubernetes.io/instance-type=t3.small,topology.ebs.csi.aws.com/zone=us-east-1b,topology.k8s.aws/zone-id=use1-az2,topology.kubernetes.io/region=us-east-1,topology.kubernetes.io/zone=us-east-1b
+
+Labels are the last col and node is the first col, putting the two together, looks like a noisy label. Lets create a more simple label
+i-00c440a20b8d7d72a ==> us-east-1,topology.kubernetes.io/zone=us-east-1a
+0f31397d584d046be ==> us-east-1,topology.kubernetes.io/zone=us-east-1a
+us-east-1,topology.kubernetes.io/zone=us-east-1b
+
+Confirm the change
+ubuntu@ip-172-31-80-224:~$ kubectl describe nodes i-00c440a20b8d7d72a
+
+$ echo -n "passdb123" |base64
+cGFzc2RiMTIz
+
+$ echo -n "passrmq123" |base64
+cGFzc3JtcTEyMw==
+
+
