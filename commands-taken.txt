@@ -1,16 +1,16 @@
-aws ec2 create-volume --availability-zone=us-east-1a --size=3 --volume-type=gp2
+ubuntu@ip-172-31-80-224:~/kube-visual-app$ aws ec2 create-volume --availability-zone=us-east-1a --size=3 --volume-type=gp3
 Out:
 {
     "AvailabilityZone": "us-east-1a",
-    "CreateTime": "2024-11-01T15:28:46+00:00",
+    "CreateTime": "2024-11-02T12:59:28+00:00",
     "Encrypted": false,
     "Size": 3,
     "SnapshotId": "",
     "State": "creating",
-    "VolumeId": "vol-0a5335f630433ee3d",
-    "Iops": 100,
+    "VolumeId": "vol-07b57f499ad778f2f",
+    "Iops": 3000,
     "Tags": [],
-    "VolumeType": "gp2",
+    "VolumeType": "gp3",
     "MultiAttachEnabled": false
 }
 Lets do some labeling. Lets first see what we have
@@ -30,11 +30,83 @@ us-east-1,topology.kubernetes.io/zone=us-east-1b
 
 Confirm the change
 ubuntu@ip-172-31-80-224:~$ kubectl describe nodes i-00c440a20b8d7d72a
+# encode the password before sending to github/repo.
 
-$ echo -n "passdb123" |base64
-cGFzc2RiMTIz
 
-$ echo -n "passrmq123" |base64
-cGFzc3JtcTEyMw==
+$ echo -n "vprodbpass" |base64
+dnByb2RicGFzcw==
+
+$ echo -n "guest" |base64
+Z3Vlc3Q=
+## Clone the repo via ssh (add ssh-keygen & git clone git@github.com....)
+ubuntu@ip-172-31-80-224:~/kube-visual-app$ `cat app-secret.yaml`
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+type: Opaque
+data:
+  db-passwd: dnByb2RicGFzcw==
+  rmq-passwd: Z3Vlc3Q=
+
+ubuntu@ip-172-31-80-224:~/kube-visual-app$ `kubectl create -f app-secret.yaml `
+secret/app-secret created
+ubuntu@ip-172-31-80-224:~/kube-visual-app$ `kubectl get secret`
+NAME         TYPE     DATA   AGE
+app-secret   Opaque   2      76s
+
+## Notice it doesn't contain the password when doing a describe:
+ubuntu@ip-172-31-80-224:~/kube-visual-app$ `kubectl describe secret app-secret`
+Name:         app-secret
+Namespace:    default
+Labels:       <none>
+Annotations:  <none>
+
+Type:  Opaque
+
+Data
+====
+db-passwd:   10 bytes
+rmq-passwd:  5 bytes
+ubuntu@ip-172-31-80-224:~/kube-visual-app$
+
+
+To avoid permission denied errors we need to create a tag in our EBS Volume. We added the below tag (see def file)
+key: KubernetesCluster value:vprokube.kubo.lazyboylabs.com
+
+When the volume is created, it will be formatted with the ext4 file system and create a directory called 'lost+found'  This will break MySql's ability to start. It will complain about the volume not being empty. For this reason, we will need to create an init container to remove it before mYsql starts. Note an alternative would be to ask MySql to ignore it...I believe this method has been depricated since version 8 of MySql.  That explains the initContainer in the def file.
+
+ubuntu@ip-172-31-80-224:~/kube-visual-app$ kubectl apply -f vprodbdepymnt.yaml 
+deployment.apps/vprodb created
+ubuntu@ip-172-31-80-224:~/kube-visual-app$ kubectl get pod
+NAME                      READY   STATUS     RESTARTS   AGE
+vprodb-58c58b547d-5k5rw   0/1     Init:0/1   0          10s
+ubuntu@ip-172-31-80-224:~/kube-visual-app$ kubectl describe pod vprodb-58c58b547d-5k5rw
+Name:             vprodb-58c58b547d-5k5rw
+Namespace:        default
+Priority:         0
+Service Account:  default
+Node:             i-0295976757c32371d/172.20.6.19
+Start Time:       Sat, 02 Nov 2024 13:06:05 +0000
+Labels:           app=vprodb
+                  pod-template-hash=58c58b547d
+Annotations:      kubernetes.io/limit-ranger: LimitRanger plugin set: cpu request for container vprodb; cpu request for init container busybox
+Status:           Running
+IP:               100.96.1.30
+...
+Events:
+  Type    Reason                  Age   From                     Message
+  ----    ------                  ----  ----                     -------
+  Normal  Scheduled               23s   default-scheduler        Successfully assigned default/vprodb-58c58b547d-5k5rw to i-0295976757c32371d
+  Normal  SuccessfulAttachVolume  21s   attachdetach-controller  AttachVolume.Attach succeeded for volume "ebs.csi.aws.com-vol-07b57f499ad778f2f"     
+  Normal  Pulling                 14s   kubelet                  Pulling image "busybox:latest"
+  Normal  Pulled                  13s   kubelet                  Successfully pulled image "busybox:latest" in 113ms (113ms including waiting). Image 
+size: 2166802 bytes.                                                                                                                                  size: 2166802 bytes.
+  Normal  Created                 13s   kubelet                  Created container busybox
+  Normal  Started                 13s   kubelet                  Started container busybox
+  Normal  Pulled                  13s   kubelet                  Container image "vprofile/vprofiledb:V1" already present on machine
+  Normal  Created                 13s   kubelet                  Created container vprodb
+  Normal  Started                 12s   kubelet                  Started container vprod
+
 
 
